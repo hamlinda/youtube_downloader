@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  youtube-downloader:
+    build: 
+      context: ..
+      dockerfile: web/Dockerfile
+    ports:
+      - "8081:8000"
+    volumes:
+      - ./downloads:/downloads
+    environment:
+      - DOWNLOAD_DIR=/downloads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.youtubedownloader.rule=PathPrefix(`/youtube`)"
+      - "traefik.http.services.youtubedownloader.loadbalancer.server.port=8000"
+    restart: unless-stopped
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
