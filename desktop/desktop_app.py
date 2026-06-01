@@ -68,8 +68,8 @@ class YouTubeDownloaderApp(ctk.CTk):
         super().__init__()
 
         self.title("YouTube Video Downloader")
-        self.geometry("600x550")
-        self.minsize(500, 450)
+        self.geometry("650x650")
+        self.minsize(550, 550)
 
         icon_path = "icon.ico"
         if hasattr(sys, "_MEIPASS"):
@@ -87,16 +87,24 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         # Title Label
         self.title_label = ctk.CTkLabel(self.main_frame, text="YouTube Video Downloader", font=ctk.CTkFont(size=24, weight="bold"))
-        self.title_label.pack(pady=(10, 20))
+        self.title_label.pack(pady=(10, 10))
 
+        # Tabview
+        self.tabview = ctk.CTkTabview(self.main_frame)
+        self.tabview.pack(fill=ctk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.download_tab = self.tabview.add("Download")
+        self.summary_tab = self.tabview.add("AI Summary & Settings")
+
+        # === DOWNLOAD TAB ===
         # URL Input
-        self.url_label = ctk.CTkLabel(self.main_frame, text="YouTube URL:")
-        self.url_label.pack(anchor="w", padx=10)
-        self.url_entry = ctk.CTkEntry(self.main_frame, placeholder_text="https://www.youtube.com/watch?v=...", width=400)
+        self.url_label = ctk.CTkLabel(self.download_tab, text="YouTube URL:")
+        self.url_label.pack(anchor="w", padx=10, pady=(10, 0))
+        self.url_entry = ctk.CTkEntry(self.download_tab, placeholder_text="https://www.youtube.com/watch?v=...", width=400)
         self.url_entry.pack(fill=ctk.X, padx=10, pady=(0, 15))
 
         # Authentication Options
-        self.auth_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.auth_frame = ctk.CTkFrame(self.download_tab, fg_color="transparent")
         self.auth_frame.pack(fill=ctk.X, padx=10, pady=(0, 15))
         
         self.auth_label = ctk.CTkLabel(self.auth_frame, text="Authentication (Browser Cookies):")
@@ -107,7 +115,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.auth_dropdown.pack(side=ctk.LEFT)
 
         # Download Path
-        self.path_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.path_frame = ctk.CTkFrame(self.download_tab, fg_color="transparent")
         self.path_frame.pack(fill=ctk.X, padx=10, pady=(0, 20))
         
         self.default_path = os.path.join(os.path.expanduser('~'), 'Downloads')
@@ -117,28 +125,66 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.open_folder_btn = ctk.CTkButton(self.path_frame, text="Open Folder", width=100, height=24, command=self.open_download_folder)
         self.open_folder_btn.pack(side=ctk.LEFT, padx=(20, 0))
 
-        # Download Options
+        # Download Options Frame
+        self.options_frame = ctk.CTkFrame(self.download_tab, fg_color="transparent")
+        self.options_frame.pack(fill=ctk.X, padx=10, pady=(0, 15))
+
         self.audio_only_var = ctk.BooleanVar(value=False)
-        self.audio_checkbox = ctk.CTkCheckBox(self.main_frame, text="Audio Only (MP3)", variable=self.audio_only_var)
-        self.audio_checkbox.pack(pady=(0, 10))
+        self.audio_checkbox = ctk.CTkCheckBox(self.options_frame, text="Audio Only (MP3)", variable=self.audio_only_var)
+        self.audio_checkbox.pack(side=ctk.LEFT, padx=(0, 20))
+
+        self.summarize_var = ctk.BooleanVar(value=False)
+        self.summarize_checkbox = ctk.CTkCheckBox(self.options_frame, text="Summarize Video (via AI)", variable=self.summarize_var)
+        self.summarize_checkbox.pack(side=ctk.LEFT)
 
         # Download Button
-        self.download_button = ctk.CTkButton(self.main_frame, text="Download Video", command=self.start_download)
-        self.download_button.pack(pady=(0, 20))
+        self.download_button = ctk.CTkButton(self.download_tab, text="Download Video", command=self.start_download)
+        self.download_button.pack(pady=(0, 15))
 
         # Progress Bar
-        self.progress_bar = ctk.CTkProgressBar(self.main_frame)
+        self.progress_bar = ctk.CTkProgressBar(self.download_tab)
         self.progress_bar.pack(fill=ctk.X, padx=10, pady=(0, 10))
         self.progress_bar.set(0)
         
         # Status Label
-        self.status_label = ctk.CTkLabel(self.main_frame, text="Ready", text_color="gray")
+        self.status_label = ctk.CTkLabel(self.download_tab, text="Ready", text_color="gray")
         self.status_label.pack(pady=(0, 5))
 
         # Log Text Box
-        self.log_box = ctk.CTkTextbox(self.main_frame, height=100)
+        self.log_box = ctk.CTkTextbox(self.download_tab, height=120)
         self.log_box.pack(fill=ctk.BOTH, expand=True, padx=10, pady=(0, 10))
         self.log_box.configure(state="disabled")
+
+        # === AI SUMMARY & SETTINGS TAB ===
+        # Settings group
+        self.settings_frame = ctk.CTkFrame(self.summary_tab, fg_color="transparent")
+        self.settings_frame.pack(fill=ctk.X, padx=10, pady=(10, 10))
+        
+        self.ollama_url_label = ctk.CTkLabel(self.settings_frame, text="Ollama URL:")
+        self.ollama_url_label.pack(side=ctk.LEFT, padx=(0, 5))
+        self.ollama_url_entry = ctk.CTkEntry(self.settings_frame, width=180)
+        self.ollama_url_entry.insert(0, "http://localhost:11434")
+        self.ollama_url_entry.pack(side=ctk.LEFT, padx=(0, 15))
+        
+        self.ollama_model_label = ctk.CTkLabel(self.settings_frame, text="Model:")
+        self.ollama_model_label.pack(side=ctk.LEFT, padx=(0, 5))
+        self.ollama_model_entry = ctk.CTkEntry(self.settings_frame, width=120)
+        self.ollama_model_entry.insert(0, "llama3:8b")
+        self.ollama_model_entry.pack(side=ctk.LEFT)
+
+        # AI Summary Area
+        self.summary_label = ctk.CTkLabel(self.summary_tab, text="AI Summary:", font=ctk.CTkFont(weight="bold"))
+        self.summary_label.pack(anchor="w", padx=10, pady=(5, 2))
+        self.summary_box = ctk.CTkTextbox(self.summary_tab, height=150)
+        self.summary_box.pack(fill=ctk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.summary_box.configure(state="disabled")
+
+        # Transcript Area
+        self.transcript_label = ctk.CTkLabel(self.summary_tab, text="Full Transcript (with timestamps):", font=ctk.CTkFont(weight="bold"))
+        self.transcript_label.pack(anchor="w", padx=10, pady=(5, 2))
+        self.transcript_box = ctk.CTkTextbox(self.summary_tab, height=150)
+        self.transcript_box.pack(fill=ctk.BOTH, expand=True, padx=10, pady=(0, 10))
+        self.transcript_box.configure(state="disabled")
 
         self.download_thread = None
 
@@ -199,20 +245,37 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         browser = self.auth_dropdown.get()
         audio_only = self.audio_only_var.get()
+        summarize = self.summarize_var.get()
+        ollama_url = self.ollama_url_entry.get().strip()
+        ollama_model = self.ollama_model_entry.get().strip()
         
         self.download_button.configure(state="disabled")
         self.progress_bar.set(0)
         self.log_box.configure(state="normal")
         self.log_box.delete("1.0", ctk.END)
         self.log_box.configure(state="disabled")
+        
+        # Clear summary and transcript boxes
+        self.summary_box.configure(state="normal")
+        self.summary_box.delete("1.0", ctk.END)
+        self.summary_box.configure(state="disabled")
+        
+        self.transcript_box.configure(state="normal")
+        self.transcript_box.delete("1.0", ctk.END)
+        self.transcript_box.configure(state="disabled")
+
         self.log(f"Starting download for: {url}")
         if browser != "None":
             self.log(f"Using {browser} cookies for authentication.")
 
-        self.download_thread = threading.Thread(target=self.download_worker, args=(url, browser, audio_only), daemon=True)
+        self.download_thread = threading.Thread(
+            target=self.download_worker, 
+            args=(url, browser, audio_only, summarize, ollama_url, ollama_model), 
+            daemon=True
+        )
         self.download_thread.start()
 
-    def download_worker(self, url, browser, audio_only):
+    def download_worker(self, url, browser, audio_only, summarize, ollama_url, ollama_model):
         download_video(
             url=url,
             default_path=self.default_path,
@@ -221,17 +284,37 @@ class YouTubeDownloaderApp(ctk.CTk):
             on_progress=self.progress_hook,
             on_success=self.download_finished_success,
             on_error=self.download_finished_error,
-            on_log=self.log
+            on_log=self.log,
+            summarize=summarize,
+            ollama_url=ollama_url,
+            ollama_model=ollama_model
         )
 
-    def download_finished_success(self):
-        self.after(0, self._success_ui)
+    def download_finished_success(self, summary=None, transcript=None):
+        self.after(0, self._success_ui, summary, transcript)
         
-    def _success_ui(self):
+    def _success_ui(self, summary=None, transcript=None):
         self.log("Download successfully completed!")
         self.progress_bar.set(1.0)
         self.status_label.configure(text="Download Finished!", text_color="green")
         self.download_button.configure(state="normal")
+        
+        if summary:
+            self.summary_box.configure(state="normal")
+            self.summary_box.insert(ctk.END, summary)
+            self.summary_box.configure(state="disabled")
+            
+        if transcript:
+            self.transcript_box.configure(state="normal")
+            self.transcript_box.insert(ctk.END, transcript)
+            self.transcript_box.configure(state="disabled")
+            
+        if summary or transcript:
+            try:
+                self.tabview.set("AI Summary & Settings")
+            except Exception:
+                pass
+
 
     def download_finished_error(self, error_message):
         self.after(0, self._error_ui, error_message)

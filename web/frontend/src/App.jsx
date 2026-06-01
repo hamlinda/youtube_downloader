@@ -6,6 +6,11 @@ function App() {
   const [url, setUrl] = useState('');
   const [browser, setBrowser] = useState('None');
   const [audioOnly, setAudioOnly] = useState(false);
+  const [summarize, setSummarize] = useState(false);
+  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
+  const [ollamaModel, setOllamaModel] = useState('llama3:8b');
+  const [summary, setSummary] = useState('');
+  const [transcript, setTranscript] = useState('');
   
   const [isDownloading, setIsDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -32,17 +37,26 @@ function App() {
     setIsDownloading(true);
     setProgress(0);
     setLogs([]);
+    setSummary('');
+    setTranscript('');
     setStatus({ text: 'Connecting to server...', type: 'normal' });
 
     // Connect to WebSocket
     // Use window.location.hostname to connect back to the same server if running in Docker/prod
     // For dev, assuming FastAPI is running on port 8000 on localhost
-    const wsUrl = `ws://${window.location.hostname}:8000/ws/download`;
+    const wsUrl = `ws://${window.location.hostname || 'localhost'}:8000/ws/download`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ url, browser, audio_only: audioOnly }));
+      ws.send(JSON.stringify({ 
+        url, 
+        browser, 
+        audio_only: audioOnly,
+        summarize,
+        ollama_url: ollamaUrl,
+        ollama_model: ollamaModel
+      }));
       setStatus({ text: 'Starting download...', type: 'white' });
       setLogs(prev => [...prev, { text: `Starting download for: ${url}`, isError: false }]);
       if (browser !== 'None') {
@@ -61,6 +75,12 @@ function App() {
         setProgress(100);
         setStatus({ text: 'Download Finished!', type: 'success' });
         setIsDownloading(false);
+        if (data.summary) {
+          setSummary(data.summary);
+        }
+        if (data.transcript) {
+          setTranscript(data.transcript);
+        }
         ws.close();
       } else if (data.type === 'error') {
         setStatus({ text: 'Error occurred', type: 'error' });
@@ -105,15 +125,53 @@ function App() {
         </select>
       </div>
 
-      <label className="checkbox-group">
-        <input 
-          type="checkbox" 
-          checked={audioOnly} 
-          onChange={(e) => setAudioOnly(e.target.checked)} 
-          disabled={isDownloading}
-        />
-        <span>Audio Only (MP3)</span>
-      </label>
+      <div className="options-row">
+        <label className="checkbox-group">
+          <input 
+            type="checkbox" 
+            checked={audioOnly} 
+            onChange={(e) => setAudioOnly(e.target.checked)} 
+            disabled={isDownloading}
+          />
+          <span>Audio Only (MP3)</span>
+        </label>
+
+        <label className="checkbox-group">
+          <input 
+            type="checkbox" 
+            checked={summarize} 
+            onChange={(e) => setSummarize(e.target.checked)} 
+            disabled={isDownloading}
+          />
+          <span>Summarize Video (via AI)</span>
+        </label>
+      </div>
+
+      {summarize && (
+        <details className="settings-details">
+          <summary>AI Summary Settings</summary>
+          <div className="settings-content">
+            <div className="input-group">
+              <label>Ollama URL:</label>
+              <input 
+                type="text" 
+                value={ollamaUrl} 
+                onChange={(e) => setOllamaUrl(e.target.value)} 
+                disabled={isDownloading}
+              />
+            </div>
+            <div className="input-group">
+              <label>Ollama Model:</label>
+              <input 
+                type="text" 
+                value={ollamaModel} 
+                onChange={(e) => setOllamaModel(e.target.value)} 
+                disabled={isDownloading}
+              />
+            </div>
+          </div>
+        </details>
+      )}
 
       <button className="download-btn" onClick={startDownload} disabled={isDownloading}>
         {isDownloading ? 'Downloading...' : <><Download size={18}/> Download Video</>}
@@ -136,6 +194,20 @@ function App() {
         ))}
         <div ref={logsEndRef} />
       </div>
+
+      {summary && (
+        <div className="result-container">
+          <h2>AI Summary</h2>
+          <div className="summary-text">{summary}</div>
+        </div>
+      )}
+
+      {transcript && (
+        <div className="result-container">
+          <h2>Transcript</h2>
+          <pre className="transcript-text">{transcript}</pre>
+        </div>
+      )}
     </div>
   );
 }

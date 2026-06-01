@@ -46,6 +46,9 @@ async def websocket_download(websocket: WebSocket):
         url = data.get("url")
         audio_only = data.get("audio_only", False)
         browser = data.get("browser", "None")
+        summarize = data.get("summarize", False)
+        ollama_url = data.get("ollama_url", "http://localhost:11434")
+        ollama_model = data.get("ollama_model", "llama3:8b")
 
         if not url:
             await manager.send_json({"type": "error", "message": "URL is required"}, websocket)
@@ -82,9 +85,14 @@ async def websocket_download(websocket: WebSocket):
                 manager.send_json({"type": "log", "message": msg}, websocket), loop
             )
 
-        def on_success():
+        def on_success(summary=None, transcript=None):
+            payload = {"type": "success", "message": "Download completed!"}
+            if summary:
+                payload["summary"] = summary
+            if transcript:
+                payload["transcript"] = transcript
             asyncio.run_coroutine_threadsafe(
-                manager.send_json({"type": "success", "message": "Download completed!"}, websocket), loop
+                manager.send_json(payload, websocket), loop
             )
 
         def on_error(err):
@@ -98,7 +106,19 @@ async def websocket_download(websocket: WebSocket):
             os.makedirs(download_path, exist_ok=True)
             
         def run_downloader():
-            download_video(url, download_path, browser, audio_only, on_progress, on_success, on_error, on_log)
+            download_video(
+                url, 
+                download_path, 
+                browser, 
+                audio_only, 
+                on_progress, 
+                on_success, 
+                on_error, 
+                on_log,
+                summarize=summarize,
+                ollama_url=ollama_url,
+                ollama_model=ollama_model
+            )
 
         thread = threading.Thread(target=run_downloader)
         thread.start()
