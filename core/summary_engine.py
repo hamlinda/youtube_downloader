@@ -91,40 +91,99 @@ def transcribe_audio(audio_path, model_size="base", on_log=None):
         logger.error(traceback.format_exc())
         return f"Transcription Error: {e}", f"Transcription Error: {e}"
 
-def summarize_transcript(transcript_text, ollama_url="http://localhost:11434", model="llama3:8b", on_log=None):
-    """
-    Summarize transcript text using a local Ollama instance.
-    """
-    check_dependencies(on_log)
+def call_ollama_api(prompt, ollama_url, model):
     import requests
-    
-    if on_log:
-        on_log(f"Requesting summary from Ollama at {ollama_url} (model: {model})...")
-        
-    if not transcript_text.strip() or transcript_text.startswith("Transcription Error:"):
-        return "Cannot summarize: Transcript is empty or transcription failed."
-        
-    prompt = (
-        "Please summarize the following video transcription. "
-        "Highlight key points, main topics, and actionable take-aways:\n\n"
-        f"Transcript:\n{transcript_text}"
-    )
-    
     url = f"{ollama_url.rstrip('/')}/api/generate"
     payload = {
         "model": model,
         "prompt": prompt,
         "stream": False
     }
+    response = requests.post(url, json=payload, timeout=300)
+    response.raise_for_status()
+    result = response.json()
+    return result.get("response", "No response from model.")
+
+def chunk_text(text, max_chars=12000):
+    lines = text.split("\n")
+    chunks = []
+    current_chunk = []
+    current_length = 0
+    
+    for line in lines:
+        if current_length + len(line) + 1 > max_chars:
+            if current_chunk:
+                chunks.append("\n".join(current_chunk))
+            current_chunk = [line]
+            current_length = len(line)
+        else:
+            current_chunk.append(line)
+            current_length += len(line) + 1
+            
+    if current_chunk:
+        chunks.append("\n".join(current_chunk))
+        
+    return chunks
+
+def summarize_transcript(transcript_text, ollama_url="http://localhost:11434", model="llama3:8b", on_log=None):
+    """
+    Summarize transcript text using a local Ollama instance.
+    """
+    check_dependencies(on_log)
+    
+    if not transcript_text.strip() or transcript_text.startswith("Transcription Error:"):
+        return "Cannot summarize: Transcript is empty or transcription failed."
+        
+    chunks = chunk_text(transcript_text, max_chars=12000)
     
     try:
-        response = requests.post(url, json=payload, timeout=120)
-        response.raise_for_status()
-        result = response.json()
-        summary = result.get("response", "No response from model.")
+        if len(chunks) == 1:
+            if on_log:
+                on_log(f"Requesting summary from Ollama at {ollama_url} (model: {model})...")
+            
+            prompt = (
+                "Please summarize the following video transcription. "
+                "Highlight key points, main topics, and actionable take-aways:\n\n"
+                f"Transcript:\n{chunks[0]}"
+            )
+            summary = call_ollama_api(prompt, ollama_url, model)
+            if on_log:
+                on_log("Summary generated successfully.")
+            return summary
+            
+        # Multiple chunks
         if on_log:
-            on_log("Summary generated successfully.")
-        return summary
+            on_log(f"Transcript is large ({len(transcript_text)} chars). Splitting into {len(chunks)} chunks for summarization...")
+            
+        chunk_summaries = []
+        for i, chunk in enumerate(chunks):
+            if on_log:
+                on_log(f"Requesting summary for section {i+1}/{len(chunks)} from Ollama...")
+            prompt = (
+                f"Please summarize this section of the video transcription:\n\n"
+                f"{chunk}"
+            )
+            summary = call_ollama_api(prompt, ollama_url, model)
+            chunk_summaries.append(summary)
+            
+        if on_log:
+            on_log("Consolidating section summaries into final summary...")
+            
+        combined_summaries = "\n\n".join(
+            [f"Summary of Section {i+1}:\n{s}" for i, s in enumerate(chunk_summaries)]
+        )
+        
+        final_prompt = (
+            "Please combine and consolidate the following section summaries of a video transcript "
+            "into a single, cohesive final summary. Highlight the key points, main topics, and actionable take-aways:\n\n"
+            f"{combined_summaries}"
+        )
+        
+        final_summary = call_ollama_api(final_prompt, ollama_url, model)
+        if on_log:
+            on_log("Final summary generated successfully.")
+        return final_summary
+        
     except Exception as e:
         err_msg = f"Error communicating with local Ollama server: {e}"
         if on_log:

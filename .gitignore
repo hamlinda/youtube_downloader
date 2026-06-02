@@ -1,0 +1,19 @@
+# YouTube Downloader gitignore
+
+# Ignored downloads directory
+web/downloads
+web/backend/downloads
+
+# Node/React Frontend
+web/frontend/node_modules
+web/frontend/dist
+web/frontend/frontend.log
+
+# Python Backend
+web/backend/__pycache__/
+web/backend/*.pyc
+web/backend/backend.log
+
+# OS files
+.DS_Store
+Thumbs.db

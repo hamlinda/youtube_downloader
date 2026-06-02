@@ -290,10 +290,10 @@ class YouTubeDownloaderApp(ctk.CTk):
             ollama_model=ollama_model
         )
 
-    def download_finished_success(self, summary=None, transcript=None):
+    def download_finished_success(self, summary=None, transcript=None, *args, **kwargs):
         self.after(0, self._success_ui, summary, transcript)
         
-    def _success_ui(self, summary=None, transcript=None):
+    def _success_ui(self, summary=None, transcript=None, *args, **kwargs):
         self.log("Download successfully completed!")
         self.progress_bar.set(1.0)
         self.status_label.configure(text="Download Finished!", text_color="green")

@@ -80,17 +80,26 @@ async def websocket_download(websocket: WebSocket):
                 except Exception:
                     pass
 
-        def on_log(msg):
+        def on_log(msg, is_error=False, *args, **kwargs):
+            formatted_msg = f"❌ {msg}" if is_error else msg
             asyncio.run_coroutine_threadsafe(
-                manager.send_json({"type": "log", "message": msg}, websocket), loop
+                manager.send_json({"type": "log", "message": formatted_msg}, websocket), loop
             )
 
-        def on_success(summary=None, transcript=None):
+        def on_success(summary=None, transcript=None, video_file=None, audio_file=None, transcript_file=None, summary_file=None, *args, **kwargs):
             payload = {"type": "success", "message": "Download completed!"}
             if summary:
                 payload["summary"] = summary
             if transcript:
                 payload["transcript"] = transcript
+            if video_file:
+                payload["video_file"] = video_file
+            if audio_file:
+                payload["audio_file"] = audio_file
+            if transcript_file:
+                payload["transcript_file"] = transcript_file
+            if summary_file:
+                payload["summary_file"] = summary_file
             asyncio.run_coroutine_threadsafe(
                 manager.send_json(payload, websocket), loop
             )
@@ -132,6 +141,11 @@ async def websocket_download(websocket: WebSocket):
     except Exception as e:
         await manager.send_json({"type": "error", "message": str(e)}, websocket)
         manager.disconnect(websocket)
+
+# Mount the downloads directory to serve the downloaded files
+download_path = os.environ.get("DOWNLOAD_DIR", os.path.join(os.path.expanduser('~'), 'Downloads'))
+if os.path.exists(download_path):
+    app.mount("/downloads", StaticFiles(directory=download_path), name="downloads")
 
 # Mount the static frontend build at the root path
 # This assumes the frontend is built into web/frontend/dist

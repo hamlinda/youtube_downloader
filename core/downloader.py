@@ -1,15 +1,26 @@
 import os
 import sys
+import shutil
 import yt_dlp
 import traceback
 
 def get_ffmpeg_path():
     try:
+        # Check for PyInstaller bundled path
         if hasattr(sys, "_MEIPASS"):
-            return os.path.join(sys._MEIPASS, "ffmpeg.exe")
-        else:
-            import imageio_ffmpeg
-            return imageio_ffmpeg.get_ffmpeg_exe()
+            binary = "ffmpeg.exe" if os.name == 'nt' else "ffmpeg"
+            bundled_path = os.path.join(sys._MEIPASS, binary)
+            if os.path.exists(bundled_path):
+                return bundled_path
+
+        # Check system PATH
+        system_path = shutil.which("ffmpeg")
+        if system_path:
+            return system_path
+
+        # Check imageio_ffmpeg
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
     except Exception:
         return None
 
@@ -17,6 +28,10 @@ def download_video(url, default_path, browser="None", audio_only=False,
                    on_progress=None, on_success=None, on_error=None, on_log=None,
                    summarize=False, ollama_url="http://localhost:11434", ollama_model="llama3:8b"):
     
+    # Resolve localhost Ollama URL to host.docker.internal if running inside Docker container
+    if os.path.exists('/.dockerenv') and ollama_url:
+        ollama_url = ollama_url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+
     def internal_progress_hook(d):
         if on_progress:
             on_progress(d)
@@ -30,6 +45,11 @@ def download_video(url, default_path, browser="None", audio_only=False,
         if on_error:
             on_error("FFmpeg not found! Cannot extract audio for transcription.")
         return
+
+    video_path = None
+    mp3_path = None
+    t_file = None
+    s_file = None
 
     outtmpl = os.path.join(default_path, '%(title)s.%(ext)s')
     
@@ -126,8 +146,15 @@ def download_video(url, default_path, browser="None", audio_only=False,
                     pass
 
         if on_success:
-            # Pass summary and transcript back
-            on_success(summary=summary, transcript=transcript)
+            # Pass summary and transcript back, plus generated filenames
+            on_success(
+                summary=summary, 
+                transcript=transcript,
+                video_file=os.path.basename(video_path) if video_path and os.path.exists(video_path) else None,
+                audio_file=os.path.basename(mp3_path) if audio_only and mp3_path and os.path.exists(mp3_path) else None,
+                transcript_file=os.path.basename(t_file) if t_file and os.path.exists(t_file) else None,
+                summary_file=os.path.basename(s_file) if s_file and os.path.exists(s_file) else None
+            )
             
     except yt_dlp.utils.DownloadError as e:
         if on_error:

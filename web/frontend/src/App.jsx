@@ -16,6 +16,12 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState({ text: 'Ready', type: 'normal' });
   const [logs, setLogs] = useState([]);
+  const [downloadedFiles, setDownloadedFiles] = useState({
+    video: null,
+    audio: null,
+    transcript: null,
+    summary: null
+  });
   
   const wsRef = useRef(null);
   const logsEndRef = useRef(null);
@@ -39,12 +45,18 @@ function App() {
     setLogs([]);
     setSummary('');
     setTranscript('');
+    setDownloadedFiles({ video: null, audio: null, transcript: null, summary: null });
     setStatus({ text: 'Connecting to server...', type: 'normal' });
 
     // Connect to WebSocket
     // Use window.location.hostname to connect back to the same server if running in Docker/prod
     // For dev, assuming FastAPI is running on port 8000 on localhost
-    const wsUrl = `ws://${window.location.hostname || 'localhost'}:8000/ws/download`;
+    const isDev = import.meta.env.DEV;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname || 'localhost';
+    const port = isDev ? '8000' : window.location.port;
+    const base = window.location.pathname.replace(/\/?[^\/]*$/, '');
+    const wsUrl = `${protocol}//${host}${port ? `:${port}` : ''}${base}/ws/download`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -75,6 +87,12 @@ function App() {
         setProgress(100);
         setStatus({ text: 'Download Finished!', type: 'success' });
         setIsDownloading(false);
+        setDownloadedFiles({
+          video: data.video_file || null,
+          audio: data.audio_file || null,
+          transcript: data.transcript_file || null,
+          summary: data.summary_file || null
+        });
         if (data.summary) {
           setSummary(data.summary);
         }
@@ -194,6 +212,50 @@ function App() {
         ))}
         <div ref={logsEndRef} />
       </div>
+
+      {(downloadedFiles.video || downloadedFiles.audio || downloadedFiles.transcript || downloadedFiles.summary) && (
+        <div className="result-container">
+          <h2>Download Collateral</h2>
+          <div className="download-buttons-group">
+            {downloadedFiles.video && (
+              <a 
+                href={`/downloads/${encodeURIComponent(downloadedFiles.video)}`} 
+                download={downloadedFiles.video}
+                className="collateral-btn video-btn"
+              >
+                Download Video (MP4)
+              </a>
+            )}
+            {downloadedFiles.audio && (
+              <a 
+                href={`/downloads/${encodeURIComponent(downloadedFiles.audio)}`} 
+                download={downloadedFiles.audio}
+                className="collateral-btn audio-btn"
+              >
+                Download Audio (MP3)
+              </a>
+            )}
+            {downloadedFiles.transcript && (
+              <a 
+                href={`/downloads/${encodeURIComponent(downloadedFiles.transcript)}`} 
+                download={downloadedFiles.transcript}
+                className="collateral-btn text-btn"
+              >
+                Download Transcript (TXT)
+              </a>
+            )}
+            {downloadedFiles.summary && (
+              <a 
+                href={`/downloads/${encodeURIComponent(downloadedFiles.summary)}`} 
+                download={downloadedFiles.summary}
+                className="collateral-btn text-btn"
+              >
+                Download Summary (TXT)
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {summary && (
         <div className="result-container">
