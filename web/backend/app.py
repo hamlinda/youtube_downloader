@@ -10,6 +10,8 @@ import threading
 # Add parent directory to sys.path to import core module
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from core.downloader import download_video
+from core.summary_engine import DEFAULT_OLLAMA_URL
+
 
 app = FastAPI()
 
@@ -47,7 +49,7 @@ async def websocket_download(websocket: WebSocket):
         audio_only = data.get("audio_only", False)
         browser = data.get("browser", "None")
         summarize = data.get("summarize", False)
-        ollama_url = data.get("ollama_url", "http://localhost:11434")
+        ollama_url = data.get("ollama_url", DEFAULT_OLLAMA_URL)
         ollama_model = data.get("ollama_model", "llama3:8b")
 
         if not url:

@@ -58,6 +58,8 @@ import threading
 # Add the parent directory to sys.path so we can import 'core'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.downloader import download_video
+from core.summary_engine import DEFAULT_OLLAMA_URL
+
 
 # Set up appearance
 ctk.set_appearance_mode("System")
@@ -163,7 +165,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.ollama_url_label = ctk.CTkLabel(self.settings_frame, text="Ollama URL:")
         self.ollama_url_label.pack(side=ctk.LEFT, padx=(0, 5))
         self.ollama_url_entry = ctk.CTkEntry(self.settings_frame, width=180)
-        self.ollama_url_entry.insert(0, "http://localhost:11434")
+        self.ollama_url_entry.insert(0, DEFAULT_OLLAMA_URL)
         self.ollama_url_entry.pack(side=ctk.LEFT, padx=(0, 15))
         
         self.ollama_model_label = ctk.CTkLabel(self.settings_frame, text="Model:")

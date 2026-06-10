@@ -7,7 +7,10 @@ function App() {
   const [browser, setBrowser] = useState('None');
   const [audioOnly, setAudioOnly] = useState(false);
   const [summarize, setSummarize] = useState(false);
-  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
+  const [ollamaUrl, setOllamaUrl] = useState(() => {
+    const host = window.location.hostname || 'localhost';
+    return `http://${host}:11434`;
+  });
   const [ollamaModel, setOllamaModel] = useState('llama3:8b');
   const [summary, setSummary] = useState('');
   const [transcript, setTranscript] = useState('');

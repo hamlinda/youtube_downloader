@@ -2,8 +2,25 @@ import os
 import sys
 import logging
 import traceback
+import socket
 
 logger = logging.getLogger(__name__)
+
+def get_platform_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.255.255.255', 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        s.close()
+    return ip
+
+PLATFORM_IP = get_platform_ip()
+DEFAULT_OLLAMA_URL = f"http://{PLATFORM_IP}:11434"
+
 
 def check_dependencies(on_log=None):
     """
@@ -125,7 +142,7 @@ def chunk_text(text, max_chars=12000):
         
     return chunks
 
-def summarize_transcript(transcript_text, ollama_url="http://localhost:11434", model="llama3:8b", on_log=None):
+def summarize_transcript(transcript_text, ollama_url=DEFAULT_OLLAMA_URL, model="llama3:8b", on_log=None):
     """
     Summarize transcript text using a local Ollama instance.
     """

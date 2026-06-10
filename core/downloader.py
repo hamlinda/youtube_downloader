@@ -3,6 +3,8 @@ import sys
 import shutil
 import yt_dlp
 import traceback
+from core.summary_engine import DEFAULT_OLLAMA_URL
+
 
 def get_ffmpeg_path():
     try:
@@ -26,7 +28,7 @@ def get_ffmpeg_path():
 
 def download_video(url, default_path, browser="None", audio_only=False, 
                    on_progress=None, on_success=None, on_error=None, on_log=None,
-                   summarize=False, ollama_url="http://localhost:11434", ollama_model="llama3:8b"):
+                   summarize=False, ollama_url=DEFAULT_OLLAMA_URL, ollama_model="llama3:8b"):
     
     # Resolve localhost Ollama URL to host.docker.internal if running inside Docker container
     if os.path.exists('/.dockerenv') and ollama_url:

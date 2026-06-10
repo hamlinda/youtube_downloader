@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 # Add project root to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.summary_engine import format_time, save_summary_files
+from core.summary_engine import format_time, save_summary_files, DEFAULT_OLLAMA_URL
 from core.downloader import download_video, get_ffmpeg_path
 
 class TestVideoSummarization(unittest.TestCase):
@@ -91,13 +91,20 @@ class TestVideoSummarization(unittest.TestCase):
             mock_transcribe.assert_called_once_with("/home/dlh/Downloads/Test Video.mp3", on_log=log_mock)
             
             # Assert summary was triggered
-            mock_summarize.assert_called_once_with("Raw text", ollama_url="http://localhost:11434", model="llama3:8b", on_log=log_mock)
+            mock_summarize.assert_called_once_with("Raw text", ollama_url=DEFAULT_OLLAMA_URL, model="llama3:8b", on_log=log_mock)
             
             # Assert save files was triggered
             mock_save.assert_called_once_with("/home/dlh/Downloads/Test Video.mp3", "Formatted text", "Summary text")
             
             # Assert success callback got the summary & transcript
-            success_mock.assert_called_once_with(summary="Summary text", transcript="Formatted text")
+            success_mock.assert_called_once_with(
+                summary="Summary text",
+                transcript="Formatted text",
+                video_file="Test Video.mp4",
+                audio_file=None,
+                transcript_file=None,
+                summary_file=None
+            )
 
 if __name__ == "__main__":
     unittest.main()
