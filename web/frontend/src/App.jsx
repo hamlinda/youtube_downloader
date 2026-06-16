@@ -25,6 +25,16 @@ function App() {
     transcript: null,
     summary: null
   });
+
+  // Upload and Library states
+  const [activeTab, setActiveTab] = useState('download'); // 'download' or 'upload'
+  const [uploadFile, setUploadFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [savedVideos, setSavedVideos] = useState([]);
+  const [previewVideo, setPreviewVideo] = useState(null);
   
   const wsRef = useRef(null);
   const logsEndRef = useRef(null);
@@ -36,6 +46,43 @@ function App() {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs]);
+
+  const fetchSavedVideos = async () => {
+    try {
+      const response = await fetch('/api/videos');
+      if (response.ok) {
+        const data = await response.json();
+        setSavedVideos(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch saved videos", err);
+    }
+  };
+
+  useEffect(() => {
+    if (showLibrary) {
+      fetchSavedVideos();
+      const timer = setInterval(fetchSavedVideos, 10000); // refresh every 10s
+      return () => clearInterval(timer);
+    }
+  }, [showLibrary]);
+
+  const handleDeleteVideo = async (filename) => {
+    if (!window.confirm(`Are you sure you want to delete "${filename}"?`)) return;
+    try {
+      const response = await fetch(`/api/videos/${encodeURIComponent(filename)}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        if (previewVideo === filename) {
+          setPreviewVideo(null);
+        }
+        fetchSavedVideos();
+      }
+    } catch (err) {
+      console.error("Failed to delete video", err);
+    }
+  };
 
   const startDownload = () => {
     if (!url.trim()) {
@@ -51,9 +98,6 @@ function App() {
     setDownloadedFiles({ video: null, audio: null, transcript: null, summary: null });
     setStatus({ text: 'Connecting to server...', type: 'normal' });
 
-    // Connect to WebSocket
-    // Use window.location.hostname to connect back to the same server if running in Docker/prod
-    // For dev, assuming FastAPI is running on port 8000 on localhost
     const isDev = import.meta.env.DEV;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.hostname || 'localhost';
@@ -124,45 +168,231 @@ function App() {
     };
   };
 
+  const startUpload = () => {
+    if (!uploadFile) {
+      setStatus({ text: 'Error: Please select a video file to upload.', type: 'error' });
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    setLogs([]);
+    setSummary('');
+    setTranscript('');
+    setDownloadedFiles({ video: null, audio: null, transcript: null, summary: null });
+    setStatus({ text: 'Uploading file...', type: 'normal' });
+    setLogs(prev => [...prev, { text: `Uploading file: ${uploadFile.name} (${(uploadFile.size / (1024 * 1024)).toFixed(2)} MB)...`, isError: false }]);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload');
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percentComplete = (event.loaded / event.total) * 100;
+        setUploadProgress(percentComplete);
+        setStatus({ text: `Uploading: ${percentComplete.toFixed(1)}%`, type: 'white' });
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const response = JSON.parse(xhr.responseText);
+        setLogs(prev => [...prev, { text: `Upload complete! Starting transcription...`, isError: false }]);
+        setIsUploading(false);
+        startTranscription(response.filename);
+      } else {
+        setIsUploading(false);
+        setStatus({ text: 'Upload failed.', type: 'error' });
+        setLogs(prev => [...prev, { text: `Upload failed with status: ${xhr.status}`, isError: true }]);
+      }
+    };
+
+    xhr.onerror = () => {
+      setIsUploading(false);
+      setStatus({ text: 'Upload failed due to network error.', type: 'error' });
+      setLogs(prev => [...prev, { text: `Upload network error.`, isError: true }]);
+    };
+
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+    xhr.send(formData);
+  };
+
+  const startTranscription = (filename) => {
+    setIsTranscribing(true);
+    setStatus({ text: 'Starting transcription...', type: 'normal' });
+
+    const isDev = import.meta.env.DEV;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname || 'localhost';
+    const port = isDev ? '8000' : window.location.port;
+    const base = window.location.pathname.replace(/\/?[^\/]*$/, '');
+    const wsUrl = `${protocol}//${host}${port ? `:${port}` : ''}${base}/ws/transcribe`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ 
+        filename, 
+        summarize,
+        ollama_url: ollamaUrl,
+        ollama_model: ollamaModel
+      }));
+      setLogs(prev => [...prev, { text: `Transcription connection established.`, isError: false }]);
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'log') {
+        setLogs(prev => [...prev, { text: data.message, isError: false }]);
+      } else if (data.type === 'success') {
+        setStatus({ text: 'Transcription Finished!', type: 'success' });
+        setIsTranscribing(false);
+        setDownloadedFiles({
+          video: filename,
+          audio: null,
+          transcript: data.transcript_file || null,
+          summary: data.summary_file || null
+        });
+        if (data.summary) {
+          setSummary(data.summary);
+        }
+        if (data.transcript) {
+          setTranscript(data.transcript);
+        }
+        ws.close();
+      } else if (data.type === 'error') {
+        setStatus({ text: 'Error occurred during transcription', type: 'error' });
+        setLogs(prev => [...prev, { text: data.message, isError: true }]);
+        setIsTranscribing(false);
+        ws.close();
+      }
+    };
+
+    ws.onclose = () => {
+      if (isTranscribing) {
+        setStatus({ text: 'Transcription connection lost.', type: 'error' });
+        setIsTranscribing(false);
+      }
+    };
+    
+    ws.onerror = () => {
+        setStatus({ text: 'WebSocket connection failed.', type: 'error' });
+        setIsTranscribing(false);
+    };
+  };
+
+  const displayProgress = activeTab === 'download' 
+    ? progress 
+    : (isUploading ? uploadProgress : (isTranscribing ? 100 : 0));
+
+  const isWorking = isDownloading || isUploading || isTranscribing;
+
   return (
     <div className="app-container">
-      <h1>YouTube Video Downloader</h1>
-
-      <div className="input-group">
-        <label>YouTube URL:</label>
-        <input 
-          type="text" 
-          placeholder="https://www.youtube.com/watch?v=..." 
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          disabled={isDownloading}
-        />
+      <div className="app-header">
+        <h1>YouTube Media Hub</h1>
+        <button className="library-btn" onClick={() => setShowLibrary(true)}>
+          📁 Saved Library
+        </button>
       </div>
 
-      <div className="input-group">
-        <label>Authentication (Browser Cookies):</label>
-        <select value={browser} onChange={(e) => setBrowser(e.target.value)} disabled={isDownloading}>
-          {browsers.map(b => <option key={b} value={b}>{b}</option>)}
-        </select>
+      <div className="tab-bar">
+        <button 
+          className={`tab-btn ${activeTab === 'download' ? 'active' : ''}`}
+          onClick={() => setActiveTab('download')}
+          disabled={isWorking}
+        >
+          Download from URL
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
+          onClick={() => setActiveTab('upload')}
+          disabled={isWorking}
+        >
+          Upload Local Video
+        </button>
       </div>
+
+      {activeTab === 'download' ? (
+        <>
+          <div className="input-group">
+            <label>YouTube URL:</label>
+            <input 
+              type="text" 
+              placeholder="https://www.youtube.com/watch?v=..." 
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              disabled={isDownloading}
+            />
+          </div>
+
+          <div className="input-group">
+            <label>Authentication (Browser Cookies):</label>
+            <select value={browser} onChange={(e) => setBrowser(e.target.value)} disabled={isDownloading}>
+              {browsers.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+        </>
+      ) : (
+        <div className="upload-section">
+          <label>Upload Video File:</label>
+          <div 
+            className="upload-dropzone"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                setUploadFile(e.dataTransfer.files[0]);
+              }
+            }}
+          >
+            <input 
+              type="file" 
+              id="file-upload" 
+              accept="video/*" 
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  setUploadFile(e.target.files[0]);
+                }
+              }}
+              style={{ display: 'none' }}
+              disabled={isUploading || isTranscribing}
+            />
+            <label htmlFor="file-upload" className="dropzone-label">
+              <div className="upload-icon">⬆️</div>
+              {uploadFile ? (
+                <div className="selected-file-info">
+                  <span className="file-name">{uploadFile.name}</span>
+                  <span className="file-size">({(uploadFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                </div>
+              ) : (
+                <span>Drag & drop video here, or click to browse</span>
+              )}
+            </label>
+          </div>
+        </div>
+      )}
 
       <div className="options-row">
-        <label className="checkbox-group">
-          <input 
-            type="checkbox" 
-            checked={audioOnly} 
-            onChange={(e) => setAudioOnly(e.target.checked)} 
-            disabled={isDownloading}
-          />
-          <span>Audio Only (MP3)</span>
-        </label>
+        {activeTab === 'download' && (
+          <label className="checkbox-group">
+            <input 
+              type="checkbox" 
+              checked={audioOnly} 
+              onChange={(e) => setAudioOnly(e.target.checked)} 
+              disabled={isDownloading}
+            />
+            <span>Audio Only (MP3)</span>
+          </label>
+        )}
 
         <label className="checkbox-group">
           <input 
             type="checkbox" 
             checked={summarize} 
             onChange={(e) => setSummarize(e.target.checked)} 
-            disabled={isDownloading}
+            disabled={isWorking}
           />
           <span>Summarize Video (via AI)</span>
         </label>
@@ -178,7 +408,7 @@ function App() {
                 type="text" 
                 value={ollamaUrl} 
                 onChange={(e) => setOllamaUrl(e.target.value)} 
-                disabled={isDownloading}
+                disabled={isWorking}
               />
             </div>
             <div className="input-group">
@@ -187,20 +417,33 @@ function App() {
                 type="text" 
                 value={ollamaModel} 
                 onChange={(e) => setOllamaModel(e.target.value)} 
-                disabled={isDownloading}
+                disabled={isWorking}
               />
             </div>
           </div>
         </details>
       )}
 
-      <button className="download-btn" onClick={startDownload} disabled={isDownloading}>
-        {isDownloading ? 'Downloading...' : <><Download size={18}/> Download Video</>}
-      </button>
+      {activeTab === 'download' ? (
+        <button className="download-btn" onClick={startDownload} disabled={isDownloading}>
+          {isDownloading ? 'Downloading...' : <><Download size={18}/> Download Video</>}
+        </button>
+      ) : (
+        <button 
+          className="download-btn upload-btn-color" 
+          onClick={startUpload} 
+          disabled={isUploading || isTranscribing || !uploadFile}
+        >
+          {isUploading ? 'Uploading...' : isTranscribing ? 'Transcribing...' : 'Upload & Transcribe'}
+        </button>
+      )}
 
       <div className="progress-container">
         <div className="progress-bar-bg">
-          <div className="progress-bar-fill" style={{ width: `${progress}%` }}></div>
+          <div 
+            className={`progress-bar-fill ${activeTab === 'upload' && isTranscribing ? 'shimmering' : ''}`} 
+            style={{ width: `${displayProgress}%` }}
+          ></div>
         </div>
         <div className={`status-text ${status.type}`}>
           {status.type === 'success' && <CheckCircle2 size={14} style={{display:'inline', verticalAlign:'middle', marginRight:'4px'}}/>}
@@ -271,6 +514,113 @@ function App() {
         <div className="result-container">
           <h2>Transcript</h2>
           <pre className="transcript-text">{transcript}</pre>
+        </div>
+      )}
+
+      {showLibrary && (
+        <div className="modal-overlay" onClick={() => { setShowLibrary(false); setPreviewVideo(null); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>📁 Saved Library</h2>
+              <button className="close-modal-btn" onClick={() => { setShowLibrary(false); setPreviewVideo(null); }}>
+                ✕
+              </button>
+            </div>
+            
+            <p className="library-note">
+              ⚠️ MP4 files are automatically deleted 24 hours after download/upload.
+            </p>
+
+            <div className="library-list">
+              {savedVideos.length === 0 ? (
+                <div className="empty-library">No saved videos found.</div>
+              ) : (
+                savedVideos.map((video) => {
+                  const hoursLeft = Math.floor(video.expires_in / 3600);
+                  const minsLeft = Math.floor((video.expires_in % 3600) / 60);
+                  const isExpiringSoon = hoursLeft < 2;
+                  
+                  return (
+                    <div key={video.filename} className="library-item">
+                      <div className="library-item-main">
+                        <div className="library-item-info">
+                          <span className="library-item-title" title={video.filename}>
+                            {video.filename}
+                          </span>
+                          <div className="library-item-meta">
+                            <span className="meta-size">
+                              {(video.size / (1024 * 1024)).toFixed(2)} MB
+                            </span>
+                            <span className={`meta-expires ${isExpiringSoon ? 'expiring-soon' : ''}`}>
+                              ⏰ Expires in {hoursLeft}h {minsLeft}m
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="library-item-actions">
+                          <button 
+                            className={`lib-action-btn play-btn ${previewVideo === video.filename ? 'active' : ''}`}
+                            onClick={() => setPreviewVideo(previewVideo === video.filename ? null : video.filename)}
+                          >
+                            {previewVideo === video.filename ? '⏸️ Stop' : '▶️ Play'}
+                          </button>
+                          <button 
+                            className="lib-action-btn delete-btn-lib" 
+                            onClick={() => handleDeleteVideo(video.filename)}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {previewVideo === video.filename && (
+                        <div className="library-video-preview">
+                          <video 
+                            controls 
+                            autoPlay 
+                            src={`/downloads/${encodeURIComponent(video.filename)}`}
+                            className="preview-video-element"
+                          />
+                        </div>
+                      )}
+
+                      <div className="library-collateral-links">
+                        <a 
+                          href={`/downloads/${encodeURIComponent(video.filename)}`} 
+                          download={video.filename}
+                          className="lib-link video"
+                        >
+                          Video (MP4)
+                        </a>
+                        {video.has_transcript ? (
+                          <a 
+                            href={`/downloads/${encodeURIComponent(video.filename.replace(/\.mp4$/, '_transcript.txt'))}`} 
+                            download={video.filename.replace(/\.mp4$/, '_transcript.txt')}
+                            className="lib-link doc"
+                          >
+                            Transcript (TXT)
+                          </a>
+                        ) : (
+                          <span className="lib-link-disabled">No Transcript</span>
+                        )}
+                        {video.has_summary ? (
+                          <a 
+                            href={`/downloads/${encodeURIComponent(video.filename.replace(/\.mp4$/, '_summary.txt'))}`} 
+                            download={video.filename.replace(/\.mp4$/, '_summary.txt')}
+                            className="lib-link doc"
+                          >
+                            Summary (TXT)
+                          </a>
+                        ) : (
+                          <span className="lib-link-disabled">No Summary</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
