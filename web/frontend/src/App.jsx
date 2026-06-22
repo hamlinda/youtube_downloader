@@ -27,7 +27,7 @@ function App() {
   });
 
   // Upload and Library states
-  const [activeTab, setActiveTab] = useState('download'); // 'download' or 'upload'
+  const [activeTab, setActiveTab] = useState('download'); // 'download', 'section', or 'upload'
   const [uploadFile, setUploadFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -35,6 +35,10 @@ function App() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [savedVideos, setSavedVideos] = useState([]);
   const [previewVideo, setPreviewVideo] = useState(null);
+  
+  // Section slicing states
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   
   const wsRef = useRef(null);
   const logsEndRef = useRef(null);
@@ -114,7 +118,9 @@ function App() {
         audio_only: audioOnly,
         summarize,
         ollama_url: ollamaUrl,
-        ollama_model: ollamaModel
+        ollama_model: ollamaModel,
+        start_time: activeTab === 'section' ? startTime : null,
+        end_time: activeTab === 'section' ? endTime : null
       }));
       setStatus({ text: 'Starting download...', type: 'white' });
       setLogs(prev => [...prev, { text: `Starting download for: ${url}`, isError: false }]);
@@ -282,7 +288,7 @@ function App() {
     };
   };
 
-  const displayProgress = activeTab === 'download' 
+  const displayProgress = (activeTab === 'download' || activeTab === 'section') 
     ? progress 
     : (isUploading ? uploadProgress : (isTranscribing ? 100 : 0));
 
@@ -303,7 +309,14 @@ function App() {
           onClick={() => setActiveTab('download')}
           disabled={isWorking}
         >
-          Download from URL
+          Download Video
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'section' ? 'active' : ''}`}
+          onClick={() => setActiveTab('section')}
+          disabled={isWorking}
+        >
+          Download Section
         </button>
         <button 
           className={`tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
@@ -314,7 +327,7 @@ function App() {
         </button>
       </div>
 
-      {activeTab === 'download' ? (
+      {(activeTab === 'download' || activeTab === 'section') ? (
         <>
           <div className="input-group">
             <label>YouTube URL:</label>
@@ -333,6 +346,31 @@ function App() {
               {browsers.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
+
+          {activeTab === 'section' && (
+            <div className="time-inputs-row">
+              <div className="input-group flex-1">
+                <label>Start Time:</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. 00:01:30 or 90" 
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  disabled={isDownloading}
+                />
+              </div>
+              <div className="input-group flex-1">
+                <label>Stop Time:</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. 00:02:15 or 135" 
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  disabled={isDownloading}
+                />
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div className="upload-section">
@@ -375,7 +413,7 @@ function App() {
       )}
 
       <div className="options-row">
-        {activeTab === 'download' && (
+        {(activeTab === 'download' || activeTab === 'section') && (
           <label className="checkbox-group">
             <input 
               type="checkbox" 
@@ -424,9 +462,9 @@ function App() {
         </details>
       )}
 
-      {activeTab === 'download' ? (
+      {(activeTab === 'download' || activeTab === 'section') ? (
         <button className="download-btn" onClick={startDownload} disabled={isDownloading}>
-          {isDownloading ? 'Downloading...' : <><Download size={18}/> Download Video</>}
+          {isDownloading ? 'Downloading...' : <><Download size={18}/> {activeTab === 'section' ? 'Download Section' : 'Download Video'}</>}
         </button>
       ) : (
         <button 

@@ -28,7 +28,8 @@ def get_ffmpeg_path():
 
 def download_video(url, default_path, browser="None", audio_only=False, 
                    on_progress=None, on_success=None, on_error=None, on_log=None,
-                   summarize=False, ollama_url=DEFAULT_OLLAMA_URL, ollama_model="llama3:8b"):
+                   summarize=False, ollama_url=DEFAULT_OLLAMA_URL, ollama_model="llama3:8b",
+                   start_time=None, end_time=None):
     
     # Resolve localhost Ollama URL to host.docker.internal if running inside Docker container
     if os.path.exists('/.dockerenv') and ollama_url:
@@ -41,11 +42,11 @@ def download_video(url, default_path, browser="None", audio_only=False,
         if d['status'] == 'finished' and on_log:
             on_log("Download chunk finished, processing file...")
 
-    # If summarize is requested, we need ffmpeg. Force check it early.
+    # If summarize or slicing is requested, we need ffmpeg. Force check it early.
     ffmpeg_path = get_ffmpeg_path()
-    if summarize and not ffmpeg_path:
+    if (summarize or start_time or end_time) and not ffmpeg_path:
         if on_error:
-            on_error("FFmpeg not found! Cannot extract audio for transcription.")
+            on_error("FFmpeg not found! Cannot slice video or extract audio for transcription.")
         return
 
     video_path = None
@@ -106,6 +107,34 @@ def download_video(url, default_path, browser="None", audio_only=False,
             video_path = base_path + ".mp4"
             if not os.path.exists(video_path) and os.path.exists(prepared_filename):
                 video_path = prepared_filename
+
+        # Slice the video/audio section if start_time or end_time is specified
+        target_file = mp3_path if audio_only else video_path
+        if target_file and os.path.exists(target_file) and (start_time or end_time):
+            if on_log:
+                on_log(f"Slicing file to section: {start_time or '0'} to {end_time or 'end'}...")
+            
+            temp_sliced = base_path + "_sliced" + os.path.splitext(target_file)[1]
+            import subprocess
+            cmd = [ffmpeg_path, "-y", "-i", target_file]
+            if start_time:
+                cmd.extend(["-ss", start_time])
+            if end_time:
+                cmd.extend(["-to", end_time])
+            cmd.extend(["-c", "copy", temp_sliced])
+            
+            try:
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                # Replace original file with sliced file
+                os.remove(target_file)
+                os.rename(temp_sliced, target_file)
+                if on_log:
+                    on_log("Slicing complete. Saved reduced file.")
+            except Exception as e:
+                if on_log:
+                    on_log(f"⚠️ Slicing failed: {e}. Keeping original file.")
+                if os.path.exists(temp_sliced):
+                    os.remove(temp_sliced)
                 
             if summarize:
                 mp3_path = base_path + ".mp3"

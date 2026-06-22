@@ -734,3 +734,14 @@ button.download-btn:disabled {
   from { transform: translateY(12px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* Time inputs row for section slicing */
+.time-inputs-row {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+}
+
+.flex-1 {
+  flex: 1;
+}

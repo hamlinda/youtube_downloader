@@ -270,6 +270,8 @@ async def websocket_download(websocket: WebSocket):
         summarize = data.get("summarize", False)
         ollama_url = data.get("ollama_url", DEFAULT_OLLAMA_URL)
         ollama_model = data.get("ollama_model", "llama3:8b")
+        start_time = data.get("start_time") or None
+        end_time = data.get("end_time") or None
 
         if not url:
             await manager.send_json({"type": "error", "message": "URL is required"}, websocket)
@@ -347,7 +349,9 @@ async def websocket_download(websocket: WebSocket):
                 on_log,
                 summarize=summarize,
                 ollama_url=ollama_url,
-                ollama_model=ollama_model
+                ollama_model=ollama_model,
+                start_time=start_time,
+                end_time=end_time
             )
 
         thread = threading.Thread(target=run_downloader)
