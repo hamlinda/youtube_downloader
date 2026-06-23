@@ -84,7 +84,27 @@ def download_video(url, default_path, browser="None", audio_only=False,
     if ffmpeg_path:
         ydl_opts['ffmpeg_location'] = ffmpeg_path
 
-    if browser != "None":
+    # Configure JS Challenge Solving with runtimes and remote solver scripts
+    ydl_opts['js_runtimes'] = {
+        'deno': {},
+        'node': {},
+        'bun': {},
+        'quickjs': {}
+    }
+    ydl_opts['remote_components'] = ['ejs:github']
+
+    # Check for cookies.txt in current working directory or default_path
+    cookies_txt = None
+    if os.path.exists("cookies.txt"):
+        cookies_txt = "cookies.txt"
+    elif os.path.exists(os.path.join(default_path, "cookies.txt")):
+        cookies_txt = os.path.join(default_path, "cookies.txt")
+        
+    if cookies_txt:
+        ydl_opts['cookiefile'] = cookies_txt
+        if on_log:
+            on_log(f"Using local cookies file: {os.path.basename(cookies_txt)}")
+    elif browser != "None":
         ydl_opts['cookiesfrombrowser'] = (browser,)
 
     try:
@@ -188,8 +208,16 @@ def download_video(url, default_path, browser="None", audio_only=False,
             )
             
     except yt_dlp.utils.DownloadError as e:
+        err_msg = str(e)
+        if "cookies" in err_msg.lower() or "cookie database" in err_msg.lower() or "item does not exist" in err_msg.lower() or "not available" in err_msg.lower():
+            err_msg += (
+                "\n\n💡 ACTIONABLE ADVICE:\n"
+                "1. Export your YouTube cookies using a browser extension (like 'Get cookies.txt LOCALLY'), name the file 'cookies.txt', and save it in the folder where the downloader is running.\n"
+                "2. Fully close Chrome/Firefox (ensure it's not running in the system tray) and try again.\n"
+                "3. If running via Docker, make sure to save the 'cookies.txt' file inside the 'web/downloads' folder so the container can access it."
+            )
         if on_error:
-            on_error(str(e))
+            on_error(err_msg)
     except Exception as e:
         if on_error:
             on_error(traceback.format_exc())

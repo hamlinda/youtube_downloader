@@ -333,11 +333,11 @@ class YouTubeDownloaderApp(ctk.CTk):
              self.log("\nACTIONABLE ADVICE: This is a private video. Ensure you have access and are logged in via the selected browser.")
         elif "Requested format is not available" in error_message:
              self.log("\nACTIONABLE ADVICE: The requested video format is not available for this video.")
-        elif "cookies" in error_message.lower() or "cookie database" in error_message.lower():
-             self.log("\nACTIONABLE ADVICE: There was an issue reading cookies from your browser. Chrome/Edge restrict cookie access. Try these solutions:\n"
-                      "1. Fully close the browser (ensure it's not running in the system tray) and try again.\n"
-                      "2. Use Firefox instead (select 'firefox' from the dropdown) as it does not lock cookies in the same way.\n"
-                      "3. Ensure the browser is installed in the default location.")
+        elif "cookies" in error_message.lower() or "cookie database" in error_message.lower() or "item does not exist" in error_message.lower() or "not available" in error_message.lower():
+             self.log("\nACTIONABLE ADVICE: There was an issue reading cookies from your browser or accessing the video. Try these solutions:\n"
+                      "1. Export your YouTube cookies using a browser extension (like 'Get cookies.txt LOCALLY'), name the file 'cookies.txt', and save it in the folder where the app is located.\n"
+                      "2. Fully close the browser (ensure it's not running in the system tray) and try again.\n"
+                      "3. Use Firefox instead (select 'firefox' from the dropdown) as it does not lock cookies in the same way.")
              
         self.download_button.configure(state="normal")
 

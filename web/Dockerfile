@@ -10,8 +10,8 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install ffmpeg for yt-dlp
-RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+# Install ffmpeg and nodejs for yt-dlp to solve JS challenges
+RUN apt-get update && apt-get install -y ffmpeg nodejs && rm -rf /var/lib/apt/lists/*
 
 COPY web/backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
