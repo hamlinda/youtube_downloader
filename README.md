@@ -62,20 +62,46 @@ Built with `customtkinter`, a modern styled wrapper around Python's standard `tk
 
 ### Prerequisites
 - **Python 3.10 or higher** (for local execution)
-- **Node.js 20+** & **npm** (only if building/developing the web frontend locally without Docker)
+- **Node.js 20+** & **npm** (only if building/developing the web frontend natively without Docker)
 - **Docker** (recommended for running the web-app version)
 
 ---
 
-### 1. Standalone Desktop App (Local Python)
+### 1. 🆕 NEW WINDOWS INSTALL (Automated Script)
 
-To run the desktop client locally:
+For Windows systems, we provide a unified interactive setup utility to fully automate dependency resolution, environment configuration, launching, and executable packaging.
+
+#### Quick Start
+1. Ensure **Python 3.10+** (ensure you check the box to **"Add python.exe to PATH"** during installation) and **Node.js** (for native web) or **Docker Desktop** (for containerized mode) are installed.
+2. Run the automated script from the root folder:
+   ```cmd
+   .\setup_windows.bat
+   ```
+
+#### Utility Script Options:
+*   **[1] Install Dependencies:** Automatically upgrades pip, installs required python libraries (`customtkinter`, `yt-dlp`, `imageio-ffmpeg`, FastAPI, uvicorn), and installs React node modules.
+*   **[2] Launch Desktop App:** Starts the CustomTkinter GUI wrapper natively.
+*   **[3] Compile Desktop App:** Bundles all python scripts, icons, and `ffmpeg.exe` into a single standalone portable executable (`.\dist\youtube_downloader.exe`) via PyInstaller.
+*   **[4] Run Web Application (Native):** Spins up the backend FastAPI server and frontend Vite server in separate Command Prompt windows.
+*   **[5] Run Web Application (Docker):** Builds and runs the Docker Compose container network.
+
+#### FFmpeg Path Resolution on Windows
+On Windows, the download engine in `core/downloader.py` utilizes a custom three-tiered FFmpeg resolver:
+1.  **Bundled Directory:** Checks if running inside a PyInstaller package (`_MEIPASS`) where `ffmpeg.exe` is bundled.
+2.  **System PATH:** Searches the OS environment variable paths for a global `ffmpeg` command.
+3.  **Python Wheel:** Falls back to `imageio-ffmpeg`'s precompiled executable binaries.
+
+---
+
+### 2. Standalone Desktop App (Unix / Manual Run)
+
+To run the desktop client manually or on Unix-based systems:
 
 1. **Install python dependencies:**
    ```bash
    pip install customtkinter yt-dlp imageio-ffmpeg
    ```
-   *(Note: `imageio-ffmpeg` supplies the necessary `ffmpeg` binary automatically for Linux/macOS. Windows will fallback to the embedded `ffmpeg.exe`).*
+   *(Note: `imageio-ffmpeg` supplies the necessary `ffmpeg` binary automatically for Linux/macOS).*
 
 2. **Launch the desktop interface:**
    ```bash
@@ -83,7 +109,7 @@ To run the desktop client locally:
    ```
 
 3. **Build a standalone executable (optional):**
-   If you want to package the app into a single `.exe` (on Windows) or bundle (on Linux/macOS), first install PyInstaller:
+   If you want to package the app into a single executable, first install PyInstaller:
    ```bash
    pip install pyinstaller
    ```
@@ -95,7 +121,7 @@ To run the desktop client locally:
 
 ---
 
-### 2. Web Application
+### 3. Web Application
 
 #### Option A: Running via Docker (Recommended)
 You only need Docker installed.
@@ -103,9 +129,12 @@ You only need Docker installed.
 1. Navigate to the project root.
 2. Start the application:
    ```bash
-   docker compose -f web/docker-compose.yml up --build
+   docker compose -f web/docker-compose.yml up --build -d
    ```
 3. Open your browser and navigate to: `http://localhost:8081` (or the configured Traefik rule). Downloads will save to the local `./web/downloads` directory.
+
+> [!WARNING]
+> **Windows WSL2 volume permissions:** When deploying on Windows with Docker Desktop, ensure the mapped directory `.\web\downloads` is shareable and has appropriate write permissions in your Docker Desktop Settings -> Resources -> File sharing.
 
 #### Option B: Running Natively (For Development)
 You will need two terminals.
