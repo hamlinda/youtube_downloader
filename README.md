@@ -157,6 +157,26 @@ python3 app.py
 
 ---
 
+### 4. 🦙 Ollama AI Setup & Model Configuration
+
+If you want to use the AI Summarization feature, you must have Ollama running and the appropriate model pulled.
+
+#### Setup Guide
+1. **Download Ollama:** Visit [ollama.com](https://ollama.com/) and download the client matching your operating system (Windows, macOS, or Linux).
+2. **Install & Start Ollama:** Run the installer and launch the Ollama application so that the background service is running.
+3. **Pull Default Models:**
+   The application defaults to `llama3:8b` for generating transcript summaries. Pull this model by running the following command in your terminal or Command Prompt:
+   ```bash
+   ollama pull llama3:8b
+   ```
+   *Note: If you have a system with limited VRAM or RAM, you can pull a lighter, faster model like `llama3.2:1b` instead:*
+   ```bash
+   ollama pull llama3.2:1b
+   ```
+   You can change the active model name directly in the settings panel of the Desktop GUI or the Web interface.
+
+---
+
 ## 🎯 Use Cases
 
 - **Offline Media Consumption:** Save educational content, tutorials, or music for offline access.
