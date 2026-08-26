@@ -102,7 +102,7 @@ else
     echo "Waiting for dev server to start..."
     VITE_PORT=""
     for i in {1..15}; do
-        VITE_PORT=$(grep -o -E "http://(localhost|[0-9\.]+):[0-9]+" web/frontend/frontend.log | head -n 1 | grep -o -E "[0-9]+")
+        VITE_PORT=$(grep -o -E "http://(localhost|[0-9\.]+):[0-9]+" web/frontend/frontend.log 2>/dev/null | head -n 1 | grep -o -E "[0-9]+" || true)
         if [ ! -z "$VITE_PORT" ]; then
             break
         fi

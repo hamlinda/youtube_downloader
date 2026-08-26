@@ -54,6 +54,7 @@ except Exception:
 
 import customtkinter as ctk
 import threading
+from tkinter import messagebox
 
 # Add the parent directory to sys.path so we can import 'core'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -136,7 +137,12 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.audio_checkbox.pack(side=ctk.LEFT, padx=(0, 20))
 
         self.summarize_var = ctk.BooleanVar(value=False)
-        self.summarize_checkbox = ctk.CTkCheckBox(self.options_frame, text="Summarize Video (via AI)", variable=self.summarize_var)
+        self.summarize_checkbox = ctk.CTkCheckBox(
+            self.options_frame, 
+            text="Summarize Video (via AI)", 
+            variable=self.summarize_var,
+            command=self.on_summarize_toggle
+        )
         self.summarize_checkbox.pack(side=ctk.LEFT)
 
         # Download Button
@@ -151,6 +157,10 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Status Label
         self.status_label = ctk.CTkLabel(self.download_tab, text="Ready", text_color="gray")
         self.status_label.pack(pady=(0, 5))
+
+        # AI Status Label
+        self.ai_status_label = ctk.CTkLabel(self.download_tab, text="Ollama Server: Disabled", text_color="gray")
+        self.ai_status_label.pack(pady=(0, 5))
 
         # Log Text Box
         self.log_box = ctk.CTkTextbox(self.download_tab, height=120)
@@ -167,12 +177,13 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.ollama_url_entry = ctk.CTkEntry(self.settings_frame, width=180)
         self.ollama_url_entry.insert(0, DEFAULT_OLLAMA_URL)
         self.ollama_url_entry.pack(side=ctk.LEFT, padx=(0, 15))
+        self.ollama_url_entry.bind("<FocusOut>", lambda e: self.check_ollama_status_async())
+        self.ollama_url_entry.bind("<Return>", lambda e: self.check_ollama_status_async())
         
         self.ollama_model_label = ctk.CTkLabel(self.settings_frame, text="Model:")
         self.ollama_model_label.pack(side=ctk.LEFT, padx=(0, 5))
-        self.ollama_model_entry = ctk.CTkEntry(self.settings_frame, width=120)
-        self.ollama_model_entry.insert(0, "llama3:8b")
-        self.ollama_model_entry.pack(side=ctk.LEFT)
+        self.ollama_model_dropdown = ctk.CTkOptionMenu(self.settings_frame, values=["llama3:8b"], width=150)
+        self.ollama_model_dropdown.pack(side=ctk.LEFT)
 
         # AI Summary Area
         self.summary_label = ctk.CTkLabel(self.summary_tab, text="AI Summary:", font=ctk.CTkFont(weight="bold"))
@@ -189,6 +200,45 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.transcript_box.configure(state="disabled")
 
         self.download_thread = None
+        self.after(500, self.check_ollama_status_async)
+
+    def on_summarize_toggle(self):
+        if self.summarize_var.get():
+            self.check_ollama_status_async()
+        else:
+            self.ai_status_label.configure(text="Ollama Server: Disabled", text_color="gray")
+
+    def check_ollama_status_async(self):
+        threading.Thread(target=self._check_ollama_status_worker, daemon=True).start()
+
+    def _check_ollama_status_worker(self):
+        import requests
+        ollama_url = self.ollama_url_entry.get().strip()
+        try:
+            tags_url = f"{ollama_url.rstrip('/')}/api/tags"
+            response = requests.get(tags_url, timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                models = [m["name"] for m in data.get("models", [])]
+                if models:
+                    self.after(0, self._update_ollama_ui, "connected", models, f"Connected ({len(models)} models available)")
+                else:
+                    self.after(0, self._update_ollama_ui, "connected", ["None"], "Connected (no models pulled)")
+            else:
+                self.after(0, self._update_ollama_ui, "disconnected", ["None"], f"HTTP error {response.status_code}")
+        except Exception as e:
+            self.after(0, self._update_ollama_ui, "disconnected", ["None"], f"Offline ({str(e)})")
+
+    def _update_ollama_ui(self, status, models, message):
+        self.ollama_model_dropdown.configure(values=models)
+        current = self.ollama_model_dropdown.get()
+        if current not in models:
+            self.ollama_model_dropdown.set(models[0])
+            
+        color = "green" if status == "connected" else "red"
+        status_text = f"Ollama Server: {status.capitalize()} | {message}"
+        self.ai_status_label.configure(text=status_text, text_color=color)
+        self.log(f"[AI Status] {status_text}")
 
     def open_download_folder(self):
         try:
@@ -238,18 +288,24 @@ class YouTubeDownloaderApp(ctk.CTk):
     def start_download(self):
         url = self.url_entry.get().strip()
         if not url:
+            self.progress_bar.set(0)
+            self.status_label.configure(text="Error: Enter URL", text_color="red")
             self.log("Error: Please enter a YouTube URL.", is_error=True)
+            messagebox.showerror("Error", "Please enter a YouTube URL.")
             return
 
         if self.download_thread and self.download_thread.is_alive():
+            self.progress_bar.set(0)
+            self.status_label.configure(text="Error: Already running", text_color="red")
             self.log("Error: A download is already in progress.", is_error=True)
+            messagebox.showerror("Error", "A download is already in progress.")
             return
 
         browser = self.auth_dropdown.get()
         audio_only = self.audio_only_var.get()
         summarize = self.summarize_var.get()
         ollama_url = self.ollama_url_entry.get().strip()
-        ollama_model = self.ollama_model_entry.get().strip()
+        ollama_model = self.ollama_model_dropdown.get().strip()
         
         self.download_button.configure(state="disabled")
         self.progress_bar.set(0)
@@ -339,7 +395,10 @@ class YouTubeDownloaderApp(ctk.CTk):
                       "2. Fully close the browser (ensure it's not running in the system tray) and try again.\n"
                       "3. Use Firefox instead (select 'firefox' from the dropdown) as it does not lock cookies in the same way.")
              
+        self.progress_bar.set(0)
+        self.status_label.configure(text="Error occurred", text_color="red")
         self.download_button.configure(state="normal")
+        messagebox.showerror("Error", error_message)
 
 if __name__ == "__main__":
     app = YouTubeDownloaderApp()

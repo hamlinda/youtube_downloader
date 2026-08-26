@@ -12,6 +12,7 @@ function App() {
     return `http://${host}:11434`;
   });
   const [ollamaModel, setOllamaModel] = useState('llama3:8b');
+  const [ollamaStatus, setOllamaStatus] = useState({ status: 'disconnected', models: [], message: 'Not checked' });
   const [summary, setSummary] = useState('');
   const [transcript, setTranscript] = useState('');
   
@@ -19,6 +20,32 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState({ text: 'Ready', type: 'normal' });
   const [logs, setLogs] = useState([]);
+
+  const checkOllamaStatus = async (targetUrl) => {
+    if (!targetUrl) return;
+    try {
+      const response = await fetch(`/api/ollama/status?url=${encodeURIComponent(targetUrl)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setOllamaStatus(data);
+        if (data.status === 'connected' && data.models.length > 0) {
+          if (!data.models.includes(ollamaModel)) {
+            setOllamaModel(data.models[0]);
+          }
+        }
+      } else {
+        setOllamaStatus({ status: 'disconnected', models: [], message: `HTTP Error ${response.status}` });
+      }
+    } catch (err) {
+      setOllamaStatus({ status: 'disconnected', models: [], message: err.message });
+    }
+  };
+
+  useEffect(() => {
+    if (summarize) {
+      checkOllamaStatus(ollamaUrl);
+    }
+  }, [summarize, ollamaUrl]);
   const [downloadedFiles, setDownloadedFiles] = useState({
     video: null,
     audio: null,
@@ -91,6 +118,8 @@ function App() {
   const startDownload = () => {
     if (!url.trim()) {
       setStatus({ text: 'Error: Please enter a YouTube URL.', type: 'error' });
+      setProgress(0);
+      alert('Error: Please enter a YouTube URL.');
       return;
     }
 
@@ -157,7 +186,11 @@ function App() {
         setStatus({ text: 'Error occurred', type: 'error' });
         setLogs(prev => [...prev, { text: data.message, isError: true }]);
         setIsDownloading(false);
+        setProgress(0);
         ws.close();
+        setTimeout(() => {
+          alert(`Error: ${data.message}`);
+        }, 50);
       }
     };
 
@@ -165,18 +198,28 @@ function App() {
       if (isDownloading) {
         setStatus({ text: 'Connection to server lost.', type: 'error' });
         setIsDownloading(false);
+        setProgress(0);
+        setTimeout(() => {
+          alert('Error: Connection to server lost.');
+        }, 50);
       }
     };
     
     ws.onerror = () => {
         setStatus({ text: 'WebSocket connection failed. Make sure backend is running.', type: 'error' });
         setIsDownloading(false);
+        setProgress(0);
+        setTimeout(() => {
+          alert('Error: WebSocket connection failed. Make sure backend is running.');
+        }, 50);
     };
   };
 
   const startUpload = () => {
     if (!uploadFile) {
       setStatus({ text: 'Error: Please select a video file to upload.', type: 'error' });
+      setProgress(0);
+      alert('Error: Please select a video file to upload.');
       return;
     }
 
@@ -208,15 +251,23 @@ function App() {
         startTranscription(response.filename);
       } else {
         setIsUploading(false);
+        setProgress(0);
         setStatus({ text: 'Upload failed.', type: 'error' });
         setLogs(prev => [...prev, { text: `Upload failed with status: ${xhr.status}`, isError: true }]);
+        setTimeout(() => {
+          alert(`Error: Upload failed with status: ${xhr.status}`);
+        }, 50);
       }
     };
 
     xhr.onerror = () => {
       setIsUploading(false);
+      setProgress(0);
       setStatus({ text: 'Upload failed due to network error.', type: 'error' });
       setLogs(prev => [...prev, { text: `Upload network error.`, isError: true }]);
+      setTimeout(() => {
+        alert('Error: Upload failed due to network error.');
+      }, 50);
     };
 
     const formData = new FormData();
@@ -271,7 +322,11 @@ function App() {
         setStatus({ text: 'Error occurred during transcription', type: 'error' });
         setLogs(prev => [...prev, { text: data.message, isError: true }]);
         setIsTranscribing(false);
+        setProgress(0);
         ws.close();
+        setTimeout(() => {
+          alert(`Error during transcription: ${data.message}`);
+        }, 50);
       }
     };
 
@@ -279,12 +334,20 @@ function App() {
       if (isTranscribing) {
         setStatus({ text: 'Transcription connection lost.', type: 'error' });
         setIsTranscribing(false);
+        setProgress(0);
+        setTimeout(() => {
+          alert('Error: Transcription connection lost.');
+        }, 50);
       }
     };
     
     ws.onerror = () => {
         setStatus({ text: 'WebSocket connection failed.', type: 'error' });
         setIsTranscribing(false);
+        setProgress(0);
+        setTimeout(() => {
+          alert('Error: WebSocket connection failed.');
+        }, 50);
     };
   };
 
@@ -451,12 +514,28 @@ function App() {
             </div>
             <div className="input-group">
               <label>Ollama Model:</label>
-              <input 
-                type="text" 
-                value={ollamaModel} 
-                onChange={(e) => setOllamaModel(e.target.value)} 
-                disabled={isWorking}
-              />
+              {ollamaStatus.status === 'connected' && ollamaStatus.models.length > 0 ? (
+                <select 
+                  value={ollamaModel} 
+                  onChange={(e) => setOllamaModel(e.target.value)} 
+                  disabled={isWorking}
+                >
+                  {ollamaStatus.models.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              ) : (
+                <select disabled>
+                  <option value="">{ollamaStatus.status === 'connected' ? 'No models available' : 'Checking server...'}</option>
+                </select>
+              )}
+            </div>
+            <div className="input-group">
+              <label>Ollama Server Connection:</label>
+              <div className={`ollama-status-badge ${ollamaStatus.status}`}>
+                {ollamaStatus.status === 'connected' ? '🟢 Connected' : '🔴 Unreachable'}
+              </div>
+              <span style={{ fontSize: '0.8rem', color: '#888', marginTop: '2px' }}>{ollamaStatus.message}</span>
             </div>
           </div>
         </details>
@@ -488,6 +567,20 @@ function App() {
           {status.type === 'error' && <AlertCircle size={14} style={{display:'inline', verticalAlign:'middle', marginRight:'4px'}}/>}
           {status.text}
         </div>
+        {summarize && (
+          <div className="status-text" style={{ fontSize: '0.85rem', marginTop: '4px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
+            <span style={{
+              display: 'inline-block',
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: ollamaStatus.status === 'connected' ? '#22c55e' : '#ef4444'
+            }}></span>
+            <span>
+              Ollama Server: {ollamaStatus.status === 'connected' ? `Connected (${ollamaModel})` : `Disconnected (${ollamaStatus.message})`}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="log-box">

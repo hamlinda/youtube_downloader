@@ -138,6 +138,37 @@ async def delete_video(filename: str):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.get("/api/ollama/status")
+async def get_ollama_status(url: str = DEFAULT_OLLAMA_URL):
+    import requests
+    resolved_url = url
+    if os.path.exists('/.dockerenv') and resolved_url:
+        resolved_url = resolved_url.replace("localhost", "host.docker.internal").replace("127.0.0.1", "host.docker.internal")
+    try:
+        tags_url = f"{resolved_url.rstrip('/')}/api/tags"
+        response = requests.get(tags_url, timeout=3)
+        if response.status_code == 200:
+            data = response.json()
+            models_list = data.get("models", [])
+            models = [m["name"] for m in models_list]
+            return {
+                "status": "connected",
+                "models": models,
+                "message": f"Connected to Ollama ({len(models)} models available)"
+            }
+        else:
+            return {
+                "status": "disconnected",
+                "models": [],
+                "message": f"Ollama returned status code {response.status_code}"
+            }
+    except Exception as e:
+        return {
+            "status": "disconnected",
+            "models": [],
+            "message": f"Could not reach Ollama server: {str(e)}"
+        }
+
 @app.websocket("/ws/transcribe")
 async def websocket_transcribe(websocket: WebSocket):
     await manager.connect(websocket)
